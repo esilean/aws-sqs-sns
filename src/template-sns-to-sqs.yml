@@ -1,0 +1,105 @@
+AWSTemplateFormatVersion : 2010-09-09
+Description: Creates a SNS that delivers messages to SQSs
+
+Parameters:
+  TopicName:
+    Type: String
+    Default: tf-logon-user
+    Description: Topic Name
+
+  QueueName:
+    Type: String
+    Default: qf-logon-user
+    Description: Queue name
+
+Resources:
+  SNSTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub ${TopicName}.fifo
+      FifoTopic: true
+      DisplayName: !Ref TopicName
+      Subscription:
+        - Endpoint: !GetAtt AppUserQueue.Arn
+          Protocol: sqs
+
+  SNSTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: '*'
+            Action:
+              - sns:Subscribe
+              - sns:Receive
+            Resource:
+              - !Ref SNSTopic
+      Topics:
+        - !Ref SNSTopic
+
+  AppUserQueue:
+    Type: AWS::SQS::Queue
+    Properties: 
+      QueueName: !Sub ${QueueName}.fifo
+      DelaySeconds: 5
+      FifoQueue: true
+      MaximumMessageSize: 262144 #256 KiB
+      MessageRetentionPeriod: 120
+      ReceiveMessageWaitTimeSeconds: 10
+
+  AppUserQueuePolicy:
+    Type: "AWS::SQS::QueuePolicy"
+    Properties:
+      Queues:
+        - Ref: AppUserQueue
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              AWS: '*'
+            Action:
+              - sqs:SendMessage
+              - sqs:ReceiveMessage
+              - sqs:DeleteMessage
+              - sqs:GetQueueUrl
+              - sqs:GetQueueAttributes
+              - sqs:ListQueueTags
+              - sqs:ChangeMessageVisibility
+            Resource:
+              - !GetAtt AppUserQueue.Arn
+
+Outputs:
+  AppUserQueue: 
+    Description: URL of new Amazon SQS Queue
+    Value: 
+      Ref: AppUserQueue
+
+  AppUserQueueARN: 
+    Description: ARN of new AmazonSQS Queue
+    Value: 
+      Fn::GetAtt: 
+        - AppUserQueue
+        - Arn
+
+  AppUserQueueName: 
+    Description: "Name of new Amazon SQS Queue"
+    Value: 
+      Fn::GetAtt: 
+        - AppUserQueue
+        - QueueName
+
+  SNSTopicARN: 
+    Description: ARN of new SNS Topic
+    Value: 
+      Ref: SNSTopic
+
+  SNSTopicName: 
+    Description: "Name of new SNS Topic"
+    Value: 
+      Fn::GetAtt: 
+        - SNSTopic
+        - TopicName
